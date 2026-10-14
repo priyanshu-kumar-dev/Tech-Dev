@@ -1,4 +1,4 @@
-services:
+ services:
   backend:
     image: node:20-alpine
     working_dir: /app
@@ -47,6 +47,6 @@ services:
       ROAD_DAMAGE_MODEL: /app/best.pt
     restart: unless-stopped
 
-volumes:
+ volumes:
   backend_node_modules:
   frontend_node_modules:
