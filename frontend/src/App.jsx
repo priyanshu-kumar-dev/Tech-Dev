@@ -1,122 +1,128 @@
-import { useState } from 'react'
-import heroImg from './assets/hero.png'
-import reactLogo from './assets/react.svg'
-import viteLogo from './assets/vite.svg'
-import './App.css'
+import { useCallback, useEffect, useState } from "react";
+import { AlertCircle, RefreshCw } from "lucide-react";
+import Navbar from "./components/Navbar";
+import Dashboard from "./pages/Dashboard";
+import AnalyzeRoad from "./pages/AnalyzeRoad";
+import Reports from "./pages/Reports";
+import { checkBackend, fetchReports } from "./services/api";
 
-function App() {
-  const [count, setCount] = useState(0)
+export default function App() {
+  const [page, setPage] = useState("dashboard");
+  const [backendOnline, setBackendOnline] = useState(false);
+  const [reports, setReports] = useState([]);
+  const [refreshing, setRefreshing] = useState(false);
+  const [connectionMessage, setConnectionMessage] = useState("");
+
+  const refreshData = useCallback(async () => {
+    setRefreshing(true);
+
+    try {
+      const health = await checkBackend();
+      setBackendOnline(Boolean(health?.success));
+      setConnectionMessage("");
+
+      const data = await fetchReports();
+      setReports(Array.isArray(data?.reports) ? data.reports : []);
+    } catch (error) {
+      setBackendOnline(false);
+      setConnectionMessage(
+        error.message || "Unable to connect to the backend."
+      );
+    } finally {
+      setRefreshing(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    refreshData();
+  }, [refreshData]);
 
   return (
-    <>
-      <section id="center">
-        <div className="hero">
-          <img src={heroImg} className="base" width="170" height="179" alt="" />
-          <img src={reactLogo} className="framework" alt="React logo" />
-          <img src={viteLogo} className="vite" alt="Vite logo" />
-        </div>
-        <div>
-          <h1>Get started</h1>
-          <p>
-            Edit <code>src/App.jsx</code> and save to test <code>HMR</code>
-          </p>
-        </div>
-        <button
-          type="button"
-          className="counter"
-          onClick={() => setCount((count) => count + 1)}
-        >
-          Count is {count}
-        </button>
-      </section>
+    <div className="app-shell">
+      <Navbar
+        page={page}
+        setPage={setPage}
+        backendOnline={backendOnline}
+      />
 
-      <div className="ticks"></div>
+      <main className="main-area">
+        <header className="topbar">
+          <div className="breadcrumb">
+            <span>RoadShield AI</span>
+            <span className="breadcrumb-separator">/</span>
+            <strong>
+              {page === "dashboard"
+                ? "Dashboard"
+                : page === "analyze"
+                  ? "Analyze Road"
+                  : "Reports"}
+            </strong>
+          </div>
 
-      <section id="next-steps">
-        <div id="docs">
-          <svg className="icon" role="presentation" aria-hidden="true">
-            <use href="/icons.svg#documentation-icon"></use>
-          </svg>
-          <h2>Documentation</h2>
-          <p>Your questions, answered</p>
-          <ul>
-            <li>
-              <a href="https://vite.dev/" target="_blank">
-                <img className="logo" src={viteLogo} alt="" />
-                Explore Vite
-              </a>
-            </li>
-            <li>
-              <a href="https://react.dev/" target="_blank">
-                <img className="button-icon" src={reactLogo} alt="" />
-                Learn more
-              </a>
-            </li>
-          </ul>
-        </div>
-        <div id="social">
-          <svg className="icon" role="presentation" aria-hidden="true">
-            <use href="/icons.svg#social-icon"></use>
-          </svg>
-          <h2>Connect with us</h2>
-          <p>Join the Vite community</p>
-          <ul>
-            <li>
-              <a href="https://github.com/vitejs/vite" target="_blank">
-                <svg
-                  className="button-icon"
-                  role="presentation"
-                  aria-hidden="true"
-                >
-                  <use href="/icons.svg#github-icon"></use>
-                </svg>
-                GitHub
-              </a>
-            </li>
-            <li>
-              <a href="https://chat.vite.dev/" target="_blank">
-                <svg
-                  className="button-icon"
-                  role="presentation"
-                  aria-hidden="true"
-                >
-                  <use href="/icons.svg#discord-icon"></use>
-                </svg>
-                Discord
-              </a>
-            </li>
-            <li>
-              <a href="https://x.com/vite_js" target="_blank">
-                <svg
-                  className="button-icon"
-                  role="presentation"
-                  aria-hidden="true"
-                >
-                  <use href="/icons.svg#x-icon"></use>
-                </svg>
-                X.com
-              </a>
-            </li>
-            <li>
-              <a href="https://bsky.app/profile/vite.dev" target="_blank">
-                <svg
-                  className="button-icon"
-                  role="presentation"
-                  aria-hidden="true"
-                >
-                  <use href="/icons.svg#bluesky-icon"></use>
-                </svg>
-                Bluesky
-              </a>
-            </li>
-          </ul>
-        </div>
-      </section>
+          <div className="topbar-right">
+            <span className={`status-dot ${backendOnline ? "" : "offline"}`} />
+            <span>{backendOnline ? "API Connected" : "API Offline"}</span>
+            <button
+              className="icon-button"
+              onClick={refreshData}
+              disabled={refreshing}
+              aria-label="Refresh data"
+              title="Refresh data"
+            >
+              <RefreshCw size={17} className={refreshing ? "spin" : ""} />
+            </button>
+          </div>
+        </header>
 
-      <div className="ticks"></div>
-      <section id="spacer"></section>
-    </>
-  )
+        {!backendOnline && (
+          <div className="global-error">
+            <AlertCircle size={18} />
+            <div>
+              <strong>Backend connection unavailable</strong>
+              <p>
+                {connectionMessage ||
+                  "Start the backend at http://localhost:5000 and refresh."}
+              </p>
+            </div>
+            <button
+              className="secondary-button"
+              onClick={refreshData}
+              disabled={refreshing}
+            >
+              Retry
+            </button>
+          </div>
+        )}
+
+        {page === "dashboard" && (
+          <Dashboard
+            reports={reports}
+            setPage={setPage}
+            backendOnline={backendOnline}
+          />
+        )}
+
+        {page === "analyze" && (
+          <AnalyzeRoad
+            reports={reports}
+            setReports={setReports}
+            setPage={setPage}
+          />
+        )}
+
+        {page === "reports" && (
+          <Reports
+            reports={reports}
+            onRefresh={refreshData}
+            refreshing={refreshing}
+          />
+        )}
+
+        <footer className="app-footer">
+          <span>RoadShield AI · Road Safety Intelligence</span>
+          <span>For inspection support; verify findings before road repairs.</span>
+        </footer>
+      </main>
+    </div>
+  );
 }
-
-export default App
