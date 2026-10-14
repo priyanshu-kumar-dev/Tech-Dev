@@ -1,6 +1,7 @@
 
 import os
 import tempfile
+from io import BytesIO
 from pathlib import Path
 
 from fastapi import FastAPI, File, HTTPException, UploadFile
@@ -11,7 +12,7 @@ from ultralytics import YOLO
 
 app = FastAPI(
     title="RoadShield AI",
-    description="Road damage detection service",
+    description="AI-based road damage detection",
     version="1.0.0",
 )
 
@@ -21,7 +22,7 @@ app.add_middleware(
         "http://localhost:5173",
         "http://127.0.0.1:5173",
     ],
-    allow_methods=["GET", "POST"],
+    allow_methods=["*"],
     allow_headers=["*"],
 )
 
@@ -31,13 +32,12 @@ MODEL_PATH = Path(
 )
 
 MAX_IMAGE_SIZE = 10 * 1024 * 1024
-ALLOWED_TYPES = {"image/jpeg", "image/png", "image/webp"}
+CONFIDENCE_THRESHOLD = 0.25
 
 model = None
 
 
 def get_model():
-    """Load the road-damage model only when needed."""
     global model
 
     if model is not None:
@@ -46,43 +46,59 @@ def get_model():
     if not MODEL_PATH.is_file():
         raise HTTPException(
             status_code=503,
-            detail=(
-                f"Model file not found: {MODEL_PATH}. "
-                "Add a road-damage-trained best.pt file."
-            ),
+            detail=f"Model file not found: {MODEL_PATH}",
         )
 
     try:
         model = YOLO(str(MODEL_PATH))
+        print(f"YOLO model loaded: {MODEL_PATH}")
+        print(f"Classes: {model.names}")
         return model
     except Exception as exc:
         print(f"Model loading error: {exc}")
         raise HTTPException(
             status_code=503,
-            detail="Could not load the AI model. Check the model file.",
+            detail=f"Could not load YOLO model: {exc}",
         )
 
 
 def normalize_class_name(name):
-    """Map common RDD-style labels to backend severity labels."""
-    label = str(name).strip()
-    key = label.lower().replace("_", " ").replace("-", " ")
+    key = str(name).strip().lower().replace("_", " ").replace("-", " ")
 
-    mappings = {
+    labels = {
         "d00": "Longitudinal Crack",
         "d10": "Transverse Crack",
         "d20": "Alligator Crack",
         "d40": "Pothole",
-        "pothole": "Pothole",
         "longitudinal crack": "Longitudinal Crack",
         "transverse crack": "Transverse Crack",
         "alligator crack": "Alligator Crack",
-        "damaged surface": "Damaged Surface",
-        "uneven road": "Uneven Road",
-        "road crack": "Road Crack",
+        "pothole": "Pothole",
     }
 
-    return mappings.get(key, label)
+    return labels.get(key, str(name))
+
+
+def get_severity(class_name, confidence):
+    name = class_name.lower()
+
+    # Initial inspection priority rules; calibrate for real-world use.
+    if "pothole" in name or "alligator" in name:
+        return "High" if confidence >= 0.50 else "Medium"
+
+    if "crack" in name:
+        return "Medium" if confidence >= 0.50 else "Low"
+
+    return "Medium"
+
+
+@app.get("/")
+def root():
+    return {
+        "success": True,
+        "service": "RoadShield AI",
+        "docs": "/docs",
+    }
 
 
 @app.get("/health")
@@ -93,52 +109,56 @@ def health():
         "status": "online",
         "modelConfigured": MODEL_PATH.is_file(),
         "modelLoaded": model is not None,
+        "model": MODEL_PATH.name,
     }
 
 
 @app.post("/analyze")
 async def analyze_image(image: UploadFile = File(...)):
-    if image.content_type not in ALLOWED_TYPES:
-        raise HTTPException(
-            status_code=400,
-            detail="Upload a JPG, PNG or WEBP image.",
-        )
-
-    content = await image.read()
-
-    if not content:
-        raise HTTPException(
-            status_code=400,
-            detail="The uploaded image is empty.",
-        )
-
-    if len(content) > MAX_IMAGE_SIZE:
-        raise HTTPException(
-            status_code=413,
-            detail="Maximum image size is 10 MB.",
-        )
-
-    # Validate the actual image before passing it to the model.
-    try:
-        from io import BytesIO
-
-        with Image.open(BytesIO(content)) as img:
-            img.verify()
-    except (UnidentifiedImageError, OSError, ValueError):
-        raise HTTPException(
-            status_code=400,
-            detail="The uploaded file is not a valid image.",
-        )
-
-    suffix = {
-        "image/jpeg": ".jpg",
-        "image/png": ".png",
-        "image/webp": ".webp",
-    }[image.content_type]
-
     temp_path = None
 
     try:
+        # Read one extra byte to enforce the upload limit.
+        content = await image.read(MAX_IMAGE_SIZE + 1)
+
+        if not content:
+            raise HTTPException(
+                status_code=400,
+                detail="Uploaded image is empty.",
+            )
+
+        if len(content) > MAX_IMAGE_SIZE:
+            raise HTTPException(
+                status_code=413,
+                detail="Maximum image size is 10 MB.",
+            )
+
+        # Validate the actual file instead of trusting its MIME type.
+        try:
+            with Image.open(BytesIO(content)) as img:
+                image_format = img.format
+                img.verify()
+        except (UnidentifiedImageError, OSError, ValueError):
+            raise HTTPException(
+                status_code=400,
+                detail="Invalid image. Upload a JPG, PNG or WEBP file.",
+            )
+
+        suffixes = {
+            "JPEG": ".jpg",
+            "PNG": ".png",
+            "WEBP": ".webp",
+        }
+
+        suffix = suffixes.get(image_format)
+
+        if suffix is None:
+            raise HTTPException(
+                status_code=400,
+                detail="Only JPG, PNG and WEBP images are supported.",
+            )
+
+        # Save temporarily because YOLO accepts an image path.
         with tempfile.NamedTemporaryFile(
             suffix=suffix,
             delete=False,
@@ -150,37 +170,39 @@ async def analyze_image(image: UploadFile = File(...)):
 
         results = detector.predict(
             source=temp_path,
-            conf=0.25,
+            conf=CONFIDENCE_THRESHOLD,
             verbose=False,
         )
 
         detections = []
 
         for result in results:
-            boxes = result.boxes
-
-            if boxes is None:
+            if result.boxes is None:
                 continue
 
-            for box in boxes:
+            for box in result.boxes:
                 class_id = int(box.cls.item())
                 confidence = float(box.conf.item())
 
-                class_names = result.names
-                raw_name = class_names.get(
-                    class_id, str(class_id)
+                names = result.names
+                raw_name = (
+                    names.get(class_id, str(class_id))
+                    if isinstance(names, dict)
+                    else names[class_id]
                 )
 
-                coords = [
+                class_name = normalize_class_name(raw_name)
+                bbox = [
                     round(float(value), 2)
                     for value in box.xyxy[0].tolist()
                 ]
 
                 detections.append({
-                    "type": normalize_class_name(raw_name),
+                    "type": class_name,
                     "class_name": str(raw_name),
                     "confidence": round(confidence, 4),
-                    "bbox": coords,
+                    "severity": get_severity(class_name, confidence),
+                    "bbox": bbox,
                     "simulated": False,
                 })
 
@@ -193,17 +215,17 @@ async def analyze_image(image: UploadFile = File(...)):
             "message": (
                 "Analysis complete."
                 if detections
-                else "No objects detected at the configured confidence threshold."
+                else "No road damage detected. Try another image or review the confidence threshold."
             ),
         }
 
     except HTTPException:
         raise
     except Exception as exc:
-        print(f"Inference error: {exc}")
+        print(f"Inference error: {type(exc).__name__}: {exc}")
         raise HTTPException(
             status_code=500,
-            detail="AI inference failed. Check the model and server logs.",
+            detail=f"AI inference failed: {type(exc).__name__}: {exc}",
         )
     finally:
         if temp_path and os.path.exists(temp_path):
