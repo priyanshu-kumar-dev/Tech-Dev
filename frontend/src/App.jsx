@@ -4,6 +4,7 @@ import Navbar from "./components/Navbar";
 import Dashboard from "./pages/Dashboard";
 import AnalyzeRoad from "./pages/AnalyzeRoad";
 import Reports from "./pages/Reports";
+import Footer from "./components/Footer";
 import { checkBackend, fetchReports } from "./services/api";
 
 export default function App() {
@@ -118,10 +119,7 @@ export default function App() {
           />
         )}
 
-        <footer className="app-footer">
-          <span>RoadShield AI · Road Safety Intelligence</span>
-          <span>For inspection support; verify findings before road repairs.</span>
-        </footer>
+        <Footer setPage={setPage} />
       </main>
     </div>
   );
