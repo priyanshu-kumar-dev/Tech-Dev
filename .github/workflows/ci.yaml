@@ -1,0 +1,29 @@
+name: CI Pipeline
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: checkout the code
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+    
+
+      - name: Install Backend dependencies
+        working-directory: ./Backend
+        run: npm ci
+
+      - name: Install Frontend dependencies
+        working-directory: ./Frontend
+        run: npm ci

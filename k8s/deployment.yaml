@@ -1,0 +1,20 @@
+
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: my-project
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: my-project
+  template:
+    metadata:
+      labels:
+        app: my-project
+    spec:
+      containers:
+        - name: my-project
+          image: prxo/my-project:09
+          ports:
+            - containerPort: 3000
