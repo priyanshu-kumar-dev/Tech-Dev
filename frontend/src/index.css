@@ -1,9 +1,8 @@
-
+﻿
 @import url("https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap");
-@import "tailwindcss";
 
 /* =========================================
-   ROADSHIELD AI — GLOBAL DESIGN SYSTEM
+   ROADSHIELD AI â€” GLOBAL DESIGN SYSTEM
 ========================================= */
 
 :root {
@@ -240,7 +239,7 @@ button:active:not(:disabled) {
 }
 
 /* =========================================
-   REPORTS PAGE — READABILITY
+   REPORTS PAGE â€” READABILITY
 ========================================= */
 
 .reports-page {
