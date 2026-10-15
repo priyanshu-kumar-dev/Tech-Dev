@@ -13,7 +13,7 @@ from ultralytics import YOLO
 app = FastAPI(
     title="RoadShield AI",
     description="AI-based road damage detection",
-    version="1.0.0",
+    version="1.1.0",
 )
 
 app.add_middleware(
@@ -32,7 +32,15 @@ MODEL_PATH = Path(
 )
 
 MAX_IMAGE_SIZE = 10 * 1024 * 1024
-CONFIDENCE_THRESHOLD = 0.25
+
+# Higher resolution can help detect small cracks.
+IMAGE_SIZE = 1280
+
+# Lower than the old 0.25 threshold, but avoids
+# accepting the extremely weak boxes from conf=0.001.
+CONFIDENCE_THRESHOLD = 0.15
+IOU_THRESHOLD = 0.50
+MAX_DETECTIONS = 50
 
 model = None
 
@@ -52,7 +60,7 @@ def get_model():
     try:
         model = YOLO(str(MODEL_PATH))
         print(f"YOLO model loaded: {MODEL_PATH}")
-        print(f"Classes: {model.names}")
+        print(f"Model classes: {model.names}")
         return model
     except Exception as exc:
         print(f"Model loading error: {exc}")
@@ -64,6 +72,7 @@ def get_model():
 
 def normalize_class_name(name):
     key = str(name).strip().lower().replace("_", " ").replace("-", " ")
+    key = " ".join(key.split())
 
     labels = {
         "d00": "Longitudinal Crack",
@@ -76,14 +85,13 @@ def normalize_class_name(name):
         "pothole": "Pothole",
     }
 
-    return labels.get(key, str(name))
+    return labels.get(key, str(name).strip().title())
 
 
 def get_severity(class_name, confidence):
     name = class_name.lower()
 
-    # Initial inspection priority rules; calibrate for real-world use.
-    if "pothole" in name or "alligator" in name:
+    if "pothole" in name or "alligator crack" in name:
         return "High" if confidence >= 0.50 else "Medium"
 
     if "crack" in name:
@@ -110,6 +118,9 @@ def health():
         "modelConfigured": MODEL_PATH.is_file(),
         "modelLoaded": model is not None,
         "model": MODEL_PATH.name,
+        "classes": model.names if model is not None else None,
+        "imageSize": IMAGE_SIZE,
+        "confidenceThreshold": CONFIDENCE_THRESHOLD,
     }
 
 
@@ -118,7 +129,6 @@ async def analyze_image(image: UploadFile = File(...)):
     temp_path = None
 
     try:
-        # Read one extra byte to enforce the upload limit.
         content = await image.read(MAX_IMAGE_SIZE + 1)
 
         if not content:
@@ -133,7 +143,6 @@ async def analyze_image(image: UploadFile = File(...)):
                 detail="Maximum image size is 10 MB.",
             )
 
-        # Validate the actual file instead of trusting its MIME type.
         try:
             with Image.open(BytesIO(content)) as img:
                 image_format = img.format
@@ -141,7 +150,7 @@ async def analyze_image(image: UploadFile = File(...)):
         except (UnidentifiedImageError, OSError, ValueError):
             raise HTTPException(
                 status_code=400,
-                detail="Invalid image. Upload a JPG, PNG or WEBP file.",
+                detail="Invalid image. Upload JPG, PNG or WEBP.",
             )
 
         suffixes = {
@@ -158,7 +167,6 @@ async def analyze_image(image: UploadFile = File(...)):
                 detail="Only JPG, PNG and WEBP images are supported.",
             )
 
-        # Save temporarily because YOLO accepts an image path.
         with tempfile.NamedTemporaryFile(
             suffix=suffix,
             delete=False,
@@ -170,7 +178,11 @@ async def analyze_image(image: UploadFile = File(...)):
 
         results = detector.predict(
             source=temp_path,
+            imgsz=IMAGE_SIZE,
             conf=CONFIDENCE_THRESHOLD,
+            iou=IOU_THRESHOLD,
+            max_det=MAX_DETECTIONS,
+            augment=False,
             verbose=False,
         )
 
@@ -180,18 +192,19 @@ async def analyze_image(image: UploadFile = File(...)):
             if result.boxes is None:
                 continue
 
+            names = result.names
+
             for box in result.boxes:
                 class_id = int(box.cls.item())
                 confidence = float(box.conf.item())
 
-                names = result.names
-                raw_name = (
-                    names.get(class_id, str(class_id))
-                    if isinstance(names, dict)
-                    else names[class_id]
-                )
+                if isinstance(names, dict):
+                    raw_name = names.get(class_id, str(class_id))
+                else:
+                    raw_name = names[class_id]
 
                 class_name = normalize_class_name(raw_name)
+
                 bbox = [
                     round(float(value), 2)
                     for value in box.xyxy[0].tolist()
@@ -201,21 +214,39 @@ async def analyze_image(image: UploadFile = File(...)):
                     "type": class_name,
                     "class_name": str(raw_name),
                     "confidence": round(confidence, 4),
-                    "severity": get_severity(class_name, confidence),
+                    "severity": get_severity(
+                        class_name,
+                        confidence,
+                    ),
                     "bbox": bbox,
                     "simulated": False,
                 })
+
+        detections.sort(
+            key=lambda item: item["confidence"],
+            reverse=True,
+        )
+
+        count = len(detections)
 
         return {
             "success": True,
             "model": MODEL_PATH.name,
             "simulated": False,
-            "count": len(detections),
+            "count": count,
             "detections": detections,
+            "settings": {
+                "imageSize": IMAGE_SIZE,
+                "confidenceThreshold": CONFIDENCE_THRESHOLD,
+                "iouThreshold": IOU_THRESHOLD,
+            },
             "message": (
                 "Analysis complete."
-                if detections
-                else "No road damage detected. Try another image or review the confidence threshold."
+                if count
+                else (
+                    "No detections passed the confidence threshold. "
+                    "Try a clear road image with visible potholes or cracks."
+                )
             ),
         }
 

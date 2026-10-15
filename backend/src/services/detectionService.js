@@ -1,6 +1,9 @@
+
 import fs from "node:fs/promises";
 import { randomUUID } from "node:crypto";
 import { normalizeDetection } from "./severity.js";
+
+const MAX_VIDEO_FRAMES = 30;
 
 const demoDetections = [
   {
@@ -21,7 +24,6 @@ const demoDetections = [
 ];
 
 async function runDemoDetection() {
-  // These are sample records, not predictions from the uploaded image.
   return demoDetections.map((item) =>
     normalizeDetection({
       ...item,
@@ -30,17 +32,20 @@ async function runDemoDetection() {
   );
 }
 
-async function runPythonDetection(file) {
+async function runPythonDetection(file, frameIndex = null) {
   const serviceUrl =
-    process.env.AI_SERVICE_URL || "http://localhost:8000/analyze";
+    process.env.AI_SERVICE_URL ||
+    "http://127.0.0.1:8000/analyze";
 
   const imageBuffer = await fs.readFile(file.path);
   const formData = new FormData();
 
   formData.append(
     "image",
-    new Blob([imageBuffer], { type: file.mimetype }),
-    file.originalname
+    new Blob([imageBuffer], {
+      type: file.mimetype || "image/jpeg",
+    }),
+    file.originalname || `road-frame-${frameIndex ?? 0}.jpg`
   );
 
   let response;
@@ -51,11 +56,12 @@ async function runPythonDetection(file) {
       body: formData,
       signal: AbortSignal.timeout(55000),
     });
-  } catch {
+  } catch (cause) {
     const error = new Error(
-      "Python AI service is unavailable. Start the AI service or use AI_MODE=demo."
+      "Python AI service is unavailable. Check that it is running on port 8000."
     );
     error.status = 503;
+    error.cause = cause;
     throw error;
   }
 
@@ -63,7 +69,9 @@ async function runPythonDetection(file) {
 
   if (!response.ok) {
     const error = new Error(
-      data?.message || "Python AI service failed to analyze the image."
+      data?.detail ||
+        data?.message ||
+        `Python AI service returned HTTP ${response.status}.`
     );
     error.status = 502;
     throw error;
@@ -77,12 +85,17 @@ async function runPythonDetection(file) {
     throw error;
   }
 
-  return data.detections.map((item) =>
-    normalizeDetection({
+  return data.detections.map((item) => {
+    const detection = normalizeDetection({
       ...item,
       simulated: false,
-    })
-  );
+    });
+
+    return {
+      ...detection,
+      ...(frameIndex !== null ? { frameIndex } : {}),
+    };
+  });
 }
 
 export async function detectRoadDamage(file) {
@@ -98,5 +111,55 @@ export async function detectRoadDamage(file) {
     detections: await runDemoDetection(),
     mode: "demo",
     isSimulated: true,
+  };
+}
+
+/**
+ * Analyze already-extracted video frames.
+ * Each frame must be an image file with a readable `path`.
+ */
+export async function detectRoadDamageInFrames(frames) {
+  if (!Array.isArray(frames) || frames.length === 0) {
+    const error = new Error(
+      "No video frames were provided for analysis."
+    );
+    error.status = 400;
+    throw error;
+  }
+
+  if (frames.length > MAX_VIDEO_FRAMES) {
+    const error = new Error(
+      `Maximum ${MAX_VIDEO_FRAMES} extracted frames can be analyzed per video.`
+    );
+    error.status = 413;
+    throw error;
+  }
+
+  if (process.env.AI_MODE !== "python") {
+    return {
+      detections: await runDemoDetection(),
+      mode: "demo",
+      isSimulated: true,
+      framesAnalyzed: 0,
+    };
+  }
+
+  const detections = [];
+
+  // Process sequentially to avoid loading many model inferences at once.
+  for (let index = 0; index < frames.length; index += 1) {
+    const frameDetections = await runPythonDetection(
+      frames[index],
+      index + 1
+    );
+
+    detections.push(...frameDetections);
+  }
+
+  return {
+    detections,
+    mode: "python",
+    isSimulated: false,
+    framesAnalyzed: frames.length,
   };
 }
