@@ -331,19 +331,19 @@ a {
 /* Page layout */
 
 .page-content {
-<<<<<<< HEAD
+
   width: 100%;
   max-width: 1650px;
   margin: 0 auto;
   padding: 32px 34px 25px;
-=======
+
   flex: 1;
   max-width: 1600px;
   width: 100%;
   margin: 0 auto;
   padding: 30px 34px 24px;
   box-sizing: border-box;
->>>>>>> 03c5f5b0e815f2a79a6fba4772302ca612b98d35
+
 }
 
 .page-heading {
@@ -1590,18 +1590,18 @@ tbody tr:last-child td {
   display: flex;
   align-items: center;
   justify-content: space-between;
-<<<<<<< HEAD
+
   gap: 15px;
   padding: 24px 0 5px;
   color: #71839d;
-=======
+
   gap: 10px;
   max-width: 1600px;
   margin: 18px auto 0;
   padding-top: 14px;
   border-top: 1px solid var(--border);
   color: #7d8da5;
->>>>>>> 03c5f5b0e815f2a79a6fba4772302ca612b98d35
+
   font-size: 9px;
   line-height: 1.8;
 }
