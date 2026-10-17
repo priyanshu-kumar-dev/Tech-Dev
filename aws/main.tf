@@ -93,7 +93,7 @@ resource "aws_route_table_association" "public" {
 
 resource "aws_security_group" "app" {
   name        = "${var.project_name}-sg"
-  description = "Allow HTTP, HTTPS, and SSH access to the RoadGuard AI app"
+  description = "Allow HTTP and restricted SSH access to RoadShield"
   vpc_id      = aws_vpc.main.id
 
   ingress {
@@ -108,14 +108,6 @@ resource "aws_security_group" "app" {
     description = "HTTP"
     from_port   = 80
     to_port     = 80
-    protocol    = "tcp"
-    cidr_blocks = ["0.0.0.0/0"]
-  }
-
-  ingress {
-    description = "HTTPS"
-    from_port   = 443
-    to_port     = 443
     protocol    = "tcp"
     cidr_blocks = ["0.0.0.0/0"]
   }
@@ -141,25 +133,34 @@ resource "aws_instance" "app" {
   associate_public_ip_address = true
   key_name                    = var.key_name != "" ? var.key_name : null
 
+  root_block_device {
+    volume_size           = 40
+    volume_type           = "gp3"
+    delete_on_termination = true
+  }
+
   user_data = <<-EOT
     #!/bin/bash
-    set -eux
+    set -euo pipefail
 
-    yum update -y
-    yum install -y git docker
+    dnf update -y
+    dnf install -y git docker curl openssl
 
     systemctl enable docker
     systemctl start docker
-    usermod -aG docker ec2-user
 
-    sudo -u ec2-user bash -lc '
-      cd /home/ec2-user
-      rm -rf RoadGuard-AI
-      git clone ${var.github_repo_url} RoadGuard-AI
-      cd RoadGuard-AI
-      docker build -t roadguard-ai .
-      docker run -d --name roadguard-ai --restart unless-stopped -p 80:5000 roadguard-ai
-    '
+    install -d -m 0755 /usr/local/lib/docker/cli-plugins
+    curl --fail --location --silent --show-error \
+      https://github.com/docker/compose/releases/download/v2.29.7/docker-compose-linux-x86_64 \
+      --output /usr/local/lib/docker/cli-plugins/docker-compose
+    chmod +x /usr/local/lib/docker/cli-plugins/docker-compose
+
+    git clone --depth 1 ${var.github_repo_url} /opt/Tech-Dev
+    cd /opt/Tech-Dev
+    printf 'JWT_SECRET=%s\nFRONTEND_URL=http://localhost\nAPP_PORT=80\n' \
+      "$(openssl rand -hex 32)" > .env
+    chmod 0600 .env
+    docker compose --env-file .env -f docker-compose.prod.yaml up -d --build
   EOT
 
   tags = {

@@ -63,7 +63,9 @@ async function runPythonDetection(file) {
 
   if (!response.ok) {
     const error = new Error(
-      data?.message || "Python AI service failed to analyze the image."
+      (typeof data?.message === "string" && data.message) ||
+        (typeof data?.detail === "string" && data.detail) ||
+        "Python AI service failed to analyze the image."
     );
     error.status = 502;
     throw error;
@@ -77,20 +79,30 @@ async function runPythonDetection(file) {
     throw error;
   }
 
-  return data.detections.map((item) =>
+  return {
+    detections: data.detections.map((item) =>
     normalizeDetection({
       ...item,
       simulated: false,
     })
-  );
+    ),
+    inferenceTimeMs:
+      typeof data.inferenceTimeMs === "number" &&
+      Number.isFinite(data.inferenceTimeMs) &&
+      data.inferenceTimeMs >= 0
+        ? data.inferenceTimeMs
+        : null,
+  };
 }
 
 export async function detectRoadDamage(file) {
-  if (process.env.AI_MODE === "python") {
+  if (process.env.AI_MODE !== "demo") {
+    const result = await runPythonDetection(file);
     return {
-      detections: await runPythonDetection(file),
+      detections: result.detections,
       mode: "python",
       isSimulated: false,
+      inferenceTimeMs: result.inferenceTimeMs,
     };
   }
 
@@ -98,5 +110,6 @@ export async function detectRoadDamage(file) {
     detections: await runDemoDetection(),
     mode: "demo",
     isSimulated: true,
+    inferenceTimeMs: null,
   };
 }

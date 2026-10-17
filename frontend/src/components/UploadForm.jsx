@@ -6,7 +6,10 @@ export default function UploadForm({ onAnalyze, loading }) {
   const [preview, setPreview] = useState("");
   const [latitude, setLatitude] = useState("");
   const [longitude, setLongitude] = useState("");
+  const [city, setCity] = useState("");
+  const [ward, setWard] = useState("");
   const [error, setError] = useState("");
+  const [isLocating, setIsLocating] = useState(false);
 
   function selectFile(event) {
     const selected = event.target.files?.[0];
@@ -41,15 +44,70 @@ export default function UploadForm({ onAnalyze, loading }) {
     }
 
     setError("");
+    setIsLocating(true);
 
-    navigator.geolocation.getCurrentPosition(
-      (position) => {
-        setLatitude(position.coords.latitude.toFixed(6));
-        setLongitude(position.coords.longitude.toFixed(6));
-      },
-      () => setError("Location permission denied. Enter coordinates manually."),
-      { enableHighAccuracy: true, timeout: 10000 }
-    );
+    const applyPosition = (position) => {
+      if (
+        !Number.isFinite(position.coords.latitude) ||
+        !Number.isFinite(position.coords.longitude)
+      ) {
+        setError("Your device returned an invalid location. Enter coordinates manually.");
+        setIsLocating(false);
+        return;
+      }
+
+      setLatitude(position.coords.latitude.toFixed(6));
+      setLongitude(position.coords.longitude.toFixed(6));
+      setIsLocating(false);
+    };
+
+    const handleLocationError = (locationError) => {
+      const messages = {
+        1: "Location access is blocked. Allow location for this site in your browser settings, then retry, or enter coordinates manually.",
+        2: "Your device couldn't determine your location. Check that device location services are on, or enter coordinates manually.",
+        3: "Getting your location took too long. Try again or enter coordinates manually.",
+      };
+
+      setError(
+        messages[locationError.code] ||
+          "Unable to get your location. Enter coordinates manually."
+      );
+      setIsLocating(false);
+    };
+
+    const requestLocation = (options, retryWithLowAccuracy = true) => {
+      try {
+        navigator.geolocation.getCurrentPosition(
+          applyPosition,
+          (locationError) => {
+            if (
+              retryWithLowAccuracy &&
+              (locationError.code === 2 || locationError.code === 3)
+            ) {
+              requestLocation(
+                {
+                  enableHighAccuracy: false,
+                  timeout: 20000,
+                  maximumAge: 60000,
+                },
+                false
+              );
+              return;
+            }
+
+            handleLocationError(locationError);
+          },
+          options
+        );
+      } catch {
+        setError(
+          "Unable to request your location. Enter coordinates manually."
+        );
+        setIsLocating(false);
+      }
+    };
+
+    requestLocation({ enableHighAccuracy: true, timeout: 15000, maximumAge: 0 });
   }
 
   async function handleSubmit(event) {
@@ -86,9 +144,18 @@ export default function UploadForm({ onAnalyze, loading }) {
         image: file,
         latitude,
         longitude,
+        city,
+        ward,
       });
     } catch (err) {
-      setError(err.message || "Analysis failed. Please try again.");
+      setError(
+        err.response?.data?.message ||
+          err.response?.data?.detail ||
+          (err.response?.status === 503
+            ? "Analysis service is temporarily unavailable (503). Please try again shortly."
+            : err.message) ||
+          "Analysis failed. Please try again."
+      );
     }
   }
 
@@ -96,8 +163,8 @@ export default function UploadForm({ onAnalyze, loading }) {
     <form className="panel upload-panel" onSubmit={handleSubmit}>
       <div className="panel-heading">
         <div>
-          <h3>Upload Road Image</h3>
-          <p>Submit a road photo for damage analysis.</p>
+          <h3>Citizen road report</h3>
+          <p>Upload a clear photo and add GPS coordinates for the repair team.</p>
         </div>
         <div className="panel-heading-icon">
           <ImagePlus size={20} />
@@ -168,13 +235,35 @@ export default function UploadForm({ onAnalyze, loading }) {
           </label>
         </div>
 
+        <div className="coordinate-grid area-grid">
+          <label>
+            City
+            <input
+              value={city}
+              onChange={(event) => setCity(event.target.value)}
+              maxLength={100}
+              placeholder="Jaipur"
+            />
+          </label>
+          <label>
+            Ward
+            <input
+              value={ward}
+              onChange={(event) => setWard(event.target.value)}
+              maxLength={100}
+              placeholder="Ward 12"
+            />
+          </label>
+        </div>
+
         <button
           type="button"
           className="secondary-button location-button"
           onClick={useCurrentLocation}
+          disabled={isLocating}
         >
           <MapPin size={16} />
-          Use my current location
+          {isLocating ? "Finding location..." : "Use my current location"}
         </button>
         <p className="field-hint">
           Current GPS or manually entered coordinates are used. Image EXIF
@@ -182,11 +271,11 @@ export default function UploadForm({ onAnalyze, loading }) {
         </p>
       </div>
 
-      {error && <div className="error-message">{error}</div>}
+      {error && <div className="error-message" role="alert">{error}</div>}
 
       <button className="primary-button analyze-button" disabled={loading}>
         <ScanSearch size={18} />
-        {loading ? "Analyzing image..." : "Analyze Road Image"}
+        {loading ? "Analyzing and saving report..." : "Analyze & Submit Report"}
       </button>
 
       <p className="privacy-note">

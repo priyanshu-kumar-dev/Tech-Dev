@@ -9,7 +9,7 @@ output "app_public_dns" {
 }
 
 output "application_url" {
-  description = "URL used to access the deployed RoadGuard AI app"
+  description = "HTTP URL used to access the RoadShield web app and API"
   value       = "http://${aws_instance.app.public_dns}"
 }
 

@@ -1,89 +1,106 @@
-import { ArrowUpDown, MapPin } from "lucide-react";
+import { ArrowRight, MapPin, ScanLine } from "lucide-react";
+import {
+  calculateRiskScore,
+  getPriorityQueueReports,
+  getReportSeverity,
+  hasValidLocation,
+} from "../utils/riskScore";
+import { getAssetUrl } from "../services/api";
 import SeverityBadge from "./SeverityBadge";
 
-const severityRank = {
-  Critical: 4,
-  High: 3,
-  Medium: 2,
-  Low: 1,
-};
+function getLocationLabel(report) {
+  const parts = [report.ward, report.city].filter(Boolean);
+  if (parts.length) return parts.join(", ");
+  if (!hasValidLocation(report.location)) return "Location needs verification";
+  return `${Number(report.location.latitude).toFixed(3)}, ${Number(
+    report.location.longitude
+  ).toFixed(3)}`;
+}
 
-export default function PriorityTable({ reports = [] }) {
-  const rows = reports
-    .flatMap((report) =>
-      (report.detections || []).map((detection, index) => ({
-        id: detection.id || `${report.id}-${index}`,
-        type: detection.type || "Road defect",
-        severity: detection.severity || "Medium",
-        priorityScore: Number(detection.priorityScore) || 0,
-        location: report.location,
-        repairAction: detection.repairAction || "Manual inspection required",
-        createdAt: report.createdAt,
-        simulated: detection.simulated ?? report.isSimulated ?? false,
-      }))
-    )
-    .sort(
-      (a, b) =>
-        (severityRank[b.severity] || 0) -
-          (severityRank[a.severity] || 0) ||
-        b.priorityScore - a.priorityScore
-    );
+export default function PriorityTable({ reports = [], setPage }) {
+  const rows = getPriorityQueueReports(reports).slice(0, 4);
 
   return (
-    <section className="panel table-panel">
-      <div className="panel-heading">
+    <section className="panel table-panel dashboard-priority-panel">
+      <div className="panel-heading dashboard-priority-heading">
         <div>
-          <h3>Repair Priority</h3>
-          <p>Highest-severity records are listed first</p>
+          <h2>Priority queue</h2>
+          <p>Highest priority road damage reports</p>
         </div>
-        <ArrowUpDown size={20} />
+        <button className="text-button" onClick={() => setPage?.("reports")}>
+          View all reports <ArrowRight size={14} />
+        </button>
       </div>
 
+      <p className="priority-score-note">
+        Prototype triage score for inspection support; not a validated safety-risk prediction.
+      </p>
+
       {rows.length === 0 ? (
-        <div className="table-empty">
-          No reports yet. Analyze a road image to create records.
+        <div className="table-empty dashboard-priority-empty">
+          No unresolved reports need review. New reports will appear here.
         </div>
       ) : (
-        <div className="table-scroll">
-          <table>
+        <div className="table-scroll dashboard-priority-scroll">
+          <table className="dashboard-priority-table">
             <thead>
               <tr>
-                <th>Defect</th>
+                <th>#</th>
+                <th>Report / location</th>
                 <th>Severity</th>
-                <th>Priority</th>
-                <th>Location</th>
-                <th>Recommended action</th>
+                <th>Risk</th>
+                <th>Reported</th>
               </tr>
             </thead>
             <tbody>
-              {rows.map((row) => (
-                <tr key={row.id}>
-                  <td>
-                    <strong>{row.type}</strong>
-                    {row.simulated && (
-                      <span className="simulated-label">Demo</span>
-                    )}
-                  </td>
-                  <td>
-                    <SeverityBadge severity={row.severity} />
-                  </td>
-                  <td>
-                    <strong>{row.priorityScore}/100</strong>
-                  </td>
-                  <td>
-                    {row.location ? (
-                      <span className="table-location">
-                        <MapPin size={14} />
-                        {Number(row.location.latitude).toFixed(3)},{" "}
-                        {Number(row.location.longitude).toFixed(3)}
-                      </span>
-                    ) : (
-                      <span className="muted-text">Not available</span>
-                    )}
-                  </td>
-                  <td>{row.repairAction}</td>
-                </tr>
-              ))}
+              {rows.map((report, index) => {
+                const risk = calculateRiskScore(report);
+                const severity = getReportSeverity(report);
+                const label =
+                  risk.topDetection?.type || report.originalName || "Road report";
+
+                return (
+                  <tr key={report.id}>
+                    <td className="priority-rank">{index + 1}</td>
+                    <td>
+                      <div className="priority-report-cell">
+                        {report.imageUrl ? (
+                          <img
+                            className="priority-report-image"
+                            src={getAssetUrl(report.imageUrl)}
+                            alt=""
+                            loading="lazy"
+                          />
+                        ) : (
+                          <span className="priority-report-image priority-report-placeholder">
+                            <ScanLine size={16} />
+                          </span>
+                        )}
+                        <span>
+                          <strong>{label}</strong>
+                          <small>
+                            <MapPin size={12} /> {getLocationLabel(report)}
+                          </small>
+                        </span>
+                      </div>
+                    </td>
+                    <td><SeverityBadge severity={severity} /></td>
+                    <td>
+                      <strong className={`priority-risk ${severity.toLowerCase()}`}>
+                        {risk.score}
+                      </strong>
+                    </td>
+                    <td className="priority-reported">
+                      {report.createdAt
+                        ? new Date(report.createdAt).toLocaleDateString(
+                            undefined,
+                            { month: "short", day: "numeric" }
+                          )
+                        : "—"}
+                    </td>
+                  </tr>
+                );
+              })}
             </tbody>
           </table>
         </div>

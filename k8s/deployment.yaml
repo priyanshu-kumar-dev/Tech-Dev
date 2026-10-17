@@ -2,19 +2,130 @@
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: my-project
+  name: roadshield-backend
 spec:
   replicas: 1
   selector:
     matchLabels:
-      app: my-project
+      app: roadshield-backend
   template:
     metadata:
       labels:
-        app: my-project
+        app: roadshield-backend
     spec:
       containers:
-        - name: my-project
-          image: prxo/my-project:09
+        - name: backend
+          image: roadshield-app:latest
+          imagePullPolicy: IfNotPresent
           ports:
-            - containerPort: 3000
+            - containerPort: 5000
+          env:
+            - name: PORT
+              value: "5000"
+            - name: NODE_ENV
+              value: production
+            - name: MONGO_URL
+              value: mongodb://mongodb:27017/roadshield-debug
+            - name: AI_MODE
+              value: python
+            - name: AI_SERVICE_URL
+              value: http://ai-service:8000/analyze
+            - name: JWT_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: roadshield-secrets
+                  key: jwt-secret
+          volumeMounts:
+            - name: uploads
+              mountPath: /app/uploads
+          readinessProbe:
+            httpGet:
+              path: /api/ready
+              port: 5000
+            initialDelaySeconds: 10
+            periodSeconds: 10
+          livenessProbe:
+            httpGet:
+              path: /api/health
+              port: 5000
+            initialDelaySeconds: 20
+            periodSeconds: 20
+      volumes:
+        - name: uploads
+          persistentVolumeClaim:
+            claimName: roadshield-uploads
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: roadshield-ai
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: roadshield-ai
+  template:
+    metadata:
+      labels:
+        app: roadshield-ai
+    spec:
+      containers:
+        - name: ai-service
+          image: roadshield-ai:latest
+          imagePullPolicy: IfNotPresent
+          ports:
+            - containerPort: 8000
+          env:
+            - name: ROAD_DAMAGE_MODEL
+              value: /app/best.pt
+            - name: MODEL_REQUIRED
+              value: "true"
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: 8000
+            initialDelaySeconds: 30
+            periodSeconds: 15
+            timeoutSeconds: 5
+---
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: mongodb
+spec:
+  serviceName: mongodb
+  replicas: 1
+  selector:
+    matchLabels:
+      app: mongodb
+  template:
+    metadata:
+      labels:
+        app: mongodb
+    spec:
+      containers:
+        - name: mongodb
+          image: mongo:7
+          ports:
+            - containerPort: 27017
+          volumeMounts:
+            - name: mongo-data
+              mountPath: /data/db
+  volumeClaimTemplates:
+    - metadata:
+        name: mongo-data
+      spec:
+        accessModes: ["ReadWriteOnce"]
+        resources:
+          requests:
+            storage: 10Gi
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: roadshield-uploads
+spec:
+  accessModes: ["ReadWriteOnce"]
+  resources:
+    requests:
+      storage: 10Gi

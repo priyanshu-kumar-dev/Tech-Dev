@@ -1,4 +1,6 @@
 
+const currentYear = new Date().getFullYear();
+
 export default function Footer({ setPage }) {
   return (
     <footer className="app-footer">
@@ -32,7 +34,7 @@ export default function Footer({ setPage }) {
 
       <div className="footer-bottom">
         <span>
-          © {new Date().getFullYear()} RoadGuard AI. All rights reserved.
+          © {currentYear} RoadGuard AI. All rights reserved.
         </span>
         <span>Built for safer roads with AI 💙</span>
       </div>

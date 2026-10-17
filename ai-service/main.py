@@ -1,6 +1,7 @@
 
 import os
 import tempfile
+import time
 from io import BytesIO
 from pathlib import Path
 
@@ -60,6 +61,12 @@ def get_model():
             status_code=503,
             detail=f"Could not load YOLO model: {exc}",
         )
+
+
+@app.on_event("startup")
+def verify_configured_model():
+    if os.getenv("MODEL_REQUIRED", "true").lower() == "true":
+        get_model()
 
 
 def normalize_class_name(name):
@@ -168,10 +175,14 @@ async def analyze_image(image: UploadFile = File(...)):
 
         detector = get_model()
 
+        inference_started_at = time.perf_counter()
         results = detector.predict(
             source=temp_path,
             conf=CONFIDENCE_THRESHOLD,
             verbose=False,
+        )
+        inference_time_ms = round(
+            (time.perf_counter() - inference_started_at) * 1000, 2
         )
 
         detections = []
@@ -210,6 +221,7 @@ async def analyze_image(image: UploadFile = File(...)):
             "success": True,
             "model": MODEL_PATH.name,
             "simulated": False,
+            "inferenceTimeMs": inference_time_ms,
             "count": len(detections),
             "detections": detections,
             "message": (

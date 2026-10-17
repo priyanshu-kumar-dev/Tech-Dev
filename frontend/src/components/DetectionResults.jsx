@@ -47,16 +47,22 @@ export default function DetectionResults({ report }) {
                   <SeverityBadge severity={item.severity} />
                 </div>
 
-                <div className="confidence-line">
-                  Confidence:{" "}
-                  {Number.isFinite(Number(item.confidence))
-                    ? `${Math.round(
-                        Number(item.confidence) <= 1
-                          ? Number(item.confidence) * 100
-                          : Number(item.confidence)
-                      )}%`
-                    : "Not provided"}
-                </div>
+                {item.simulated || report.isSimulated ? (
+                  <div className="confidence-line">
+                    Illustrative demo score — not an AI confidence result
+                  </div>
+                ) : (
+                  <div className="confidence-line">
+                    Model confidence:{" "}
+                    {Number.isFinite(Number(item.confidence))
+                      ? `${Math.round(
+                          Number(item.confidence) <= 1
+                            ? Number(item.confidence) * 100
+                            : Number(item.confidence)
+                        )}%`
+                      : "Not provided"}
+                  </div>
+                )}
 
                 {item.priorityScore != null && (
                   <div className="score-line">
@@ -75,9 +81,9 @@ export default function DetectionResults({ report }) {
       )}
 
       <p className="field-hint">
-        Model confidence and severity depend on the backend's actual detection
-        implementation. Priority scores are recommendations, not a substitute
-        for a professional road-safety inspection.
+        Confidence is displayed only for model-generated detections. Severity
+        and priority are recommendations, not a substitute for a professional
+        road-safety inspection.
       </p>
     </section>
   );

@@ -1,12 +1,33 @@
-import { Activity, MapPinned, LayoutDashboard, ScanLine, FileText } from "lucide-react";
+import {
+  Activity,
+  BarChart3,
+  FileText,
+  LayoutDashboard,
+  LogIn,
+  LogOut,
+  Map,
+  MapPinned,
+  ScanLine,
+  UserPlus,
+  Wrench,
+} from "lucide-react";
 
 const navigation = [
-  { id: "dashboard", label: "Dashboard", icon: LayoutDashboard },
-  { id: "analyze", label: "Analyze Road", icon: ScanLine },
-  { id: "reports", label: "Reports", icon: FileText },
+  { id: "dashboard", label: "Dashboard", icon: LayoutDashboard, page: "dashboard" },
+  { id: "analyze", label: "Analyze Road", icon: ScanLine, page: "analyze" },
+  { id: "reports", label: "Reports", icon: FileText, page: "reports" },
+  { id: "live-map", label: "Live Map", icon: Map, page: "dashboard" },
+  { id: "analytics", label: "Analytics", icon: BarChart3, page: "analytics" },
+  { id: "maintenance", label: "Maintenance", icon: Wrench, page: "reports" },
 ];
 
-export default function Navbar({ page, setPage, backendOnline }) {
+export default function Navbar({
+  page,
+  setPage,
+  backendOnline,
+  user,
+  onSignOut,
+}) {
   return (
     <aside className="sidebar">
       <div className="brand">
@@ -22,17 +43,66 @@ export default function Navbar({ page, setPage, backendOnline }) {
       <div className="nav-label">WORKSPACE</div>
 
       <nav className="nav-list">
-        {navigation.map(({ id, label, icon: Icon }) => (
+        {navigation.map(({ id, label, icon: Icon, page: targetPage }) => (
           <button
             key={id}
             className={`nav-item ${page === id ? "active" : ""}`}
-            onClick={() => setPage(id)}
+            onClick={() => {
+              setPage(targetPage);
+              if (id === "live-map") {
+                window.setTimeout(() => {
+                  document.getElementById("dashboard-map")?.scrollIntoView({
+                    behavior: "smooth",
+                    block: "start",
+                  });
+                }, 0);
+              } else {
+                window.history.replaceState(null, "", window.location.pathname);
+              }
+            }}
           >
             <Icon size={19} />
             <span>{label}</span>
           </button>
         ))}
       </nav>
+
+      <div className="account-nav">
+        {user ? (
+          <>
+            <div className="account-summary">
+              <span className="account-avatar">
+                {user.name?.charAt(0)?.toUpperCase() || "U"}
+              </span>
+              <span className="account-details">
+                <strong>{user.name}</strong>
+                <small>{user.email}</small>
+              </span>
+            </div>
+            <button className="account-action" onClick={onSignOut}>
+              <LogOut size={16} />
+              <span>Sign out</span>
+            </button>
+          </>
+        ) : (
+          <>
+            <button
+              className={`account-action ${page === "login" ? "active" : ""}`}
+              onClick={() => setPage("login")}
+            >
+              <LogIn size={16} />
+              <span>Sign in</span>
+            </button>
+            <button
+              className={`account-action ${page === "signup" ? "active" : ""}`}
+              onClick={() => setPage("signup")}
+            >
+              <UserPlus size={16} />
+              <span>Create account</span>
+            </button>
+          </>
+        )}
+      </div>
 
       <div className="sidebar-bottom">
         <div className="system-card">

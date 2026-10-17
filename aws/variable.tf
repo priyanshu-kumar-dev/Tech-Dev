@@ -29,9 +29,9 @@ variable "public_subnet_cidrs" {
 }
 
 variable "instance_type" {
-  description = "EC2 instance type for the application"
+  description = "EC2 instance type for the backend and CPU inference service"
   type        = string
-  default     = "t3.micro"
+  default     = "t3.large"
 }
 
 variable "key_name" {
@@ -43,11 +43,11 @@ variable "key_name" {
 variable "admin_cidr" {
   description = "CIDR allowed to access SSH; use your public IP in production"
   type        = string
-  default     = "0.0.0.0/0"
+  default     = "127.0.0.1/32"
 }
 
 variable "github_repo_url" {
   description = "GitHub repository that contains the application source code"
   type        = string
-  default     = "https://github.com/Princekumarsahu-321/RoadGuard-AI.git"
+  default     = "https://github.com/priyanshu-kumar-dev/Tech-Dev.git"
 }
