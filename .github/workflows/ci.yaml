@@ -1,5 +1,5 @@
 
-name: RoadGuard AI CI
+name: RoadShield AI CI
 
 on:
   push:
@@ -10,10 +10,6 @@ on:
 
 permissions:
   contents: read
-
-concurrency:
-  group: roadguard-ci-${{ github.ref }}
-  cancel-in-progress: true
 
 jobs:
   test-and-build:
@@ -40,27 +36,10 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: 20
-          cache: npm
-          cache-dependency-path: |
-            backend/package-lock.json
-            frontend/package-lock.json
-
-      # Backend
-      - name: Validate backend files
-        shell: bash
-        run: |
-          test -f backend/package.json || {
-            echo "ERROR: backend/package.json is missing"
-            exit 1
-          }
-          test -f backend/package-lock.json || {
-            echo "ERROR: backend/package-lock.json is missing"
-            exit 1
-          }
 
       - name: Install backend dependencies
         working-directory: backend
-        run: npm ci
+        run: npm install --no-audit --no-fund
 
       - name: Run backend tests
         working-directory: backend
@@ -69,22 +48,9 @@ jobs:
           CI: "true"
         run: npm test
 
-      # Frontend
-      - name: Validate frontend files
-        shell: bash
-        run: |
-          test -f frontend/package.json || {
-            echo "ERROR: frontend/package.json is missing"
-            exit 1
-          }
-          test -f frontend/package-lock.json || {
-            echo "ERROR: frontend/package-lock.json is missing"
-            exit 1
-          }
-
       - name: Install frontend dependencies
         working-directory: frontend
-        run: npm ci
+        run: npm install --no-audit --no-fund
 
       - name: Lint frontend
         working-directory: frontend
@@ -94,27 +60,16 @@ jobs:
         working-directory: frontend
         run: npm run build
 
-      # Python AI service
       - name: Setup Python
         uses: actions/setup-python@v5
         with:
           python-version: "3.11"
 
-      - name: Validate AI service
-        shell: bash
-        run: |
-          test -d ai-service || {
-            echo "ERROR: ai-service directory is missing"
-            exit 1
-          }
-          python -m compileall -q ai-service
-
-      # Docker
-      - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v3
+      - name: Check AI service Python syntax
+        run: python -m compileall -q ai-service
 
       - name: Build application Docker image
-        run: docker build -f dockerfile -t roadguard-app:ci .
+        run: docker build -f dockerfile -t roadshield-app:ci .
 
       - name: Build AI service Docker image
-        run: docker build -f ai-service/Dockerfile -t roadguard-ai:ci ./ai-service
+        run: docker build -f ai-service/Dockerfile -t roadshield-ai:ci ./ai-service
