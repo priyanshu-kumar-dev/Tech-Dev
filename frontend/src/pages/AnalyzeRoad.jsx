@@ -1,5 +1,9 @@
+
 import { useState } from "react";
-import { analyzeRoadImage } from "../services/api";
+import {
+  analyzeRoadImage,
+  analyzeRoadVideo,
+} from "../services/api";
 import UploadForm from "../components/UploadForm";
 import DetectionResults from "../components/DetectionResults";
 import RoadMap from "../components/RoadMap";
@@ -9,19 +13,25 @@ export default function AnalyzeRoad({ reports, setReports, setPage }) {
   const [loading, setLoading] = useState(false);
   const [currentReport, setCurrentReport] = useState(null);
   const [message, setMessage] = useState("");
+  const [error, setError] = useState("");
 
   async function handleAnalyze(data) {
     setLoading(true);
     setMessage("");
+    setError("");
 
     try {
-      const result = await analyzeRoadImage(data);
+      const result =
+        data.mediaType === "video"
+          ? await analyzeRoadVideo(data)
+          : await analyzeRoadImage(data);
 
       if (!result.success || !result.report) {
         throw new Error(result.message || "Analysis did not return a report.");
       }
 
       setCurrentReport(result.report);
+
       setReports((previous) => {
         const withoutDuplicate = previous.filter(
           (item) => item.id !== result.report.id
@@ -31,8 +41,10 @@ export default function AnalyzeRoad({ reports, setReports, setPage }) {
 
       setMessage(
         result.message ||
-          "Image processed. Check whether results are model-generated or simulated."
+          `${data.mediaType === "video" ? "Video" : "Image"} analysis completed.`
       );
+    } catch (err) {
+      setError(err.message || "Analysis failed. Please try again.");
     } finally {
       setLoading(false);
     }
@@ -50,11 +62,16 @@ export default function AnalyzeRoad({ reports, setReports, setPage }) {
       <div className="page-heading">
         <div>
           <p className="eyebrow">ROAD INSPECTION</p>
+<<<<<<< HEAD
           <h1>Report Road Damage</h1>
           <p>
             Share a road photo and location. The report is saved for the
             responsible team to review.
           </p>
+=======
+          <h1>Analyze Road Damage</h1>
+          <p>Upload a road image or video and inspect AI detections.</p>
+>>>>>>> 7dcba19d2d2fea1813801286954f60f945d7aa70
         </div>
       </div>
 
@@ -70,6 +87,7 @@ export default function AnalyzeRoad({ reports, setReports, setPage }) {
       </ol>
 
       {message && <div className="success-banner">{message}</div>}
+<<<<<<< HEAD
       {currentReport && (
         <section className="report-submitted-banner" role="status">
           <div>
@@ -102,6 +120,9 @@ export default function AnalyzeRoad({ reports, setReports, setPage }) {
           The uploaded image matched and its coordinates are within 100 metres.
         </div>
       )}
+=======
+      {error && <div className="error-message">{error}</div>}
+>>>>>>> 7dcba19d2d2fea1813801286954f60f945d7aa70
 
       <div className="analyze-grid">
         <UploadForm onAnalyze={handleAnalyze} loading={loading} />
@@ -112,8 +133,16 @@ export default function AnalyzeRoad({ reports, setReports, setPage }) {
       <PriorityTable reports={visibleReports} />
 
       {currentReport && (
+<<<<<<< HEAD
         <button className="text-button" onClick={() => setPage("dashboard")}>
           Back to dashboard
+=======
+        <button
+          className="secondary-button"
+          onClick={() => setPage("reports")}
+        >
+          View all reports
+>>>>>>> 7dcba19d2d2fea1813801286954f60f945d7aa70
         </button>
       )}
     </div>

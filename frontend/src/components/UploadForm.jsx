@@ -1,8 +1,29 @@
-import { useState } from "react";
-import { ImagePlus, MapPin, Upload, X, ScanSearch } from "lucide-react";
+
+import { useEffect, useState } from "react";
+import {
+  ImagePlus,
+  MapPin,
+  Upload,
+  X,
+  ScanSearch,
+  Video,
+} from "lucide-react";
+
+const IMAGE_TYPES = ["image/jpeg", "image/png", "image/webp"];
+const VIDEO_TYPES = [
+  "video/mp4",
+  "video/webm",
+  "video/quicktime",
+  "video/x-msvideo",
+  "video/x-matroska",
+];
+
+const IMAGE_MAX_SIZE = 10 * 1024 * 1024;
+const VIDEO_MAX_SIZE = 100 * 1024 * 1024;
 
 export default function UploadForm({ onAnalyze, loading }) {
   const [file, setFile] = useState(null);
+  const [mediaType, setMediaType] = useState("image");
   const [preview, setPreview] = useState("");
   const [latitude, setLatitude] = useState("");
   const [longitude, setLongitude] = useState("");
@@ -11,18 +32,44 @@ export default function UploadForm({ onAnalyze, loading }) {
   const [error, setError] = useState("");
   const [isLocating, setIsLocating] = useState(false);
 
+  useEffect(() => {
+    return () => {
+      if (preview) URL.revokeObjectURL(preview);
+    };
+  }, [preview]);
+
+  function selectMediaType(type) {
+    setMediaType(type);
+    setFile(null);
+    setPreview("");
+    setError("");
+  }
+
   function selectFile(event) {
     const selected = event.target.files?.[0];
+    event.target.value = "";
 
     if (!selected) return;
 
-    if (!["image/jpeg", "image/png", "image/webp"].includes(selected.type)) {
-      setError("Please select a JPG, PNG or WEBP image.");
+    const isImage = mediaType === "image";
+    const allowedTypes = isImage ? IMAGE_TYPES : VIDEO_TYPES;
+    const maxSize = isImage ? IMAGE_MAX_SIZE : VIDEO_MAX_SIZE;
+
+    if (!allowedTypes.includes(selected.type)) {
+      setError(
+        isImage
+          ? "Please select a JPG, PNG or WEBP image."
+          : "Please select an MP4, WEBM, MOV, AVI or MKV video."
+      );
       return;
     }
 
-    if (selected.size > 10 * 1024 * 1024) {
-      setError("Image size must be 10 MB or less.");
+    if (selected.size > maxSize) {
+      setError(
+        isImage
+          ? "Image size must be 10 MB or less."
+          : "Video size must be 100 MB or less."
+      );
       return;
     }
 
@@ -32,9 +79,9 @@ export default function UploadForm({ onAnalyze, loading }) {
   }
 
   function removeFile() {
-    if (preview) URL.revokeObjectURL(preview);
     setFile(null);
     setPreview("");
+    setError("");
   }
 
   function useCurrentLocation() {
@@ -115,7 +162,11 @@ export default function UploadForm({ onAnalyze, loading }) {
     setError("");
 
     if (!file) {
-      setError("Please select a road image first.");
+      setError(
+        mediaType === "image"
+          ? "Please select a road image first."
+          : "Please select a road video first."
+      );
       return;
     }
 
@@ -141,7 +192,8 @@ export default function UploadForm({ onAnalyze, loading }) {
 
     try {
       await onAnalyze({
-        image: file,
+        [mediaType]: file,
+        mediaType,
         latitude,
         longitude,
         city,
@@ -163,41 +215,119 @@ export default function UploadForm({ onAnalyze, loading }) {
     <form className="panel upload-panel" onSubmit={handleSubmit}>
       <div className="panel-heading">
         <div>
+<<<<<<< HEAD
           <h3>Citizen road report</h3>
           <p>Upload a clear photo and add GPS coordinates for the repair team.</p>
+=======
+          <h3>Upload Road {mediaType === "image" ? "Image" : "Video"}</h3>
+          <p>
+            Analyze road damage from a photo or video recording.
+          </p>
+>>>>>>> 7dcba19d2d2fea1813801286954f60f945d7aa70
         </div>
         <div className="panel-heading-icon">
-          <ImagePlus size={20} />
+          {mediaType === "image" ? (
+            <ImagePlus size={20} />
+          ) : (
+            <Video size={20} />
+          )}
         </div>
+      </div>
+
+      <div className="media-type-switch">
+        <button
+          type="button"
+          className={
+            mediaType === "image"
+              ? "secondary-button media-option active"
+              : "secondary-button media-option"
+          }
+          onClick={() => selectMediaType("image")}
+          disabled={loading}
+        >
+          <ImagePlus size={17} />
+          Image
+        </button>
+
+        <button
+          type="button"
+          className={
+            mediaType === "video"
+              ? "secondary-button media-option active"
+              : "secondary-button media-option"
+          }
+          onClick={() => selectMediaType("video")}
+          disabled={loading}
+        >
+          <Video size={17} />
+          Video
+        </button>
       </div>
 
       {!preview ? (
         <label className="upload-zone">
           <input
             type="file"
-            accept="image/jpeg,image/png,image/webp"
+            accept={
+              mediaType === "image"
+                ? "image/jpeg,image/png,image/webp"
+                : "video/mp4,video/webm,video/quicktime,video/x-msvideo,video/x-matroska,.mp4,.webm,.mov,.avi,.mkv"
+            }
             onChange={selectFile}
+            disabled={loading}
             hidden
           />
+
           <div className="upload-icon">
             <Upload size={25} />
           </div>
-          <strong>Choose a road image</strong>
-          <span>JPG, PNG or WEBP · Maximum 10 MB</span>
+          <strong>
+            Choose a road {mediaType === "image" ? "image" : "video"}
+          </strong>
+          <span>
+            {mediaType === "image"
+              ? "JPG, PNG or WEBP · Maximum 10 MB"
+              : "MP4, WEBM, MOV, AVI or MKV · Maximum 100 MB"}
+          </span>
           <span className="upload-browse">Browse files</span>
         </label>
       ) : (
         <div className="image-preview">
-          <img src={preview} alt="Selected road for analysis" />
+          {mediaType === "image" ? (
+            <img src={preview} alt="Selected road for analysis" />
+          ) : (
+            <video
+              src={preview}
+              controls
+              preload="metadata"
+              style={{
+                display: "block",
+                width: "100%",
+                maxHeight: "320px",
+                background: "#111",
+                borderRadius: "8px",
+              }}
+            />
+          )}
+
           <button
             type="button"
             className="remove-image"
             onClick={removeFile}
-            aria-label="Remove selected image"
+            aria-label="Remove selected file"
+            disabled={loading}
           >
             <X size={18} />
           </button>
-          <div className="image-file-name">{file?.name}</div>
+
+          <div className="image-file-name">
+            {file?.name}
+            {file && (
+              <span>
+                {" "}({(file.size / (1024 * 1024)).toFixed(2)} MB)
+              </span>
+            )}
+          </div>
         </div>
       )}
 
@@ -219,8 +349,10 @@ export default function UploadForm({ onAnalyze, loading }) {
               value={latitude}
               onChange={(e) => setLatitude(e.target.value)}
               placeholder="26.9124"
+              disabled={loading}
             />
           </label>
+
           <label>
             Longitude
             <input
@@ -231,6 +363,7 @@ export default function UploadForm({ onAnalyze, loading }) {
               value={longitude}
               onChange={(e) => setLongitude(e.target.value)}
               placeholder="75.7873"
+              disabled={loading}
             />
           </label>
         </div>
@@ -260,26 +393,41 @@ export default function UploadForm({ onAnalyze, loading }) {
           type="button"
           className="secondary-button location-button"
           onClick={useCurrentLocation}
+<<<<<<< HEAD
           disabled={isLocating}
+=======
+          disabled={loading}
+>>>>>>> 7dcba19d2d2fea1813801286954f60f945d7aa70
         >
           <MapPin size={16} />
           {isLocating ? "Finding location..." : "Use my current location"}
         </button>
+
         <p className="field-hint">
-          Current GPS or manually entered coordinates are used. Image EXIF
-          extraction must be supported by the backend to read photo metadata.
+          Manual coordinates override metadata when supported by the backend.
+          Otherwise, available GPS metadata may be used.
         </p>
       </div>
 
       {error && <div className="error-message" role="alert">{error}</div>}
 
-      <button className="primary-button analyze-button" disabled={loading}>
+      <button
+        type="submit"
+        className="primary-button analyze-button"
+        disabled={loading || !file}
+      >
         <ScanSearch size={18} />
+<<<<<<< HEAD
         {loading ? "Analyzing and saving report..." : "Analyze & Submit Report"}
+=======
+        {loading
+          ? `Analyzing ${mediaType}...`
+          : `Analyze Road ${mediaType === "image" ? "Image" : "Video"}`}
+>>>>>>> 7dcba19d2d2fea1813801286954f60f945d7aa70
       </button>
 
       <p className="privacy-note">
-        Upload only images you are authorized to use. Do not upload sensitive
+        Upload only media you are authorized to use. Do not upload sensitive
         personal information.
       </p>
     </form>

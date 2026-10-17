@@ -1,8 +1,15 @@
 
+<<<<<<< HEAD
 import "./config/env.js";
 import express from "express";
 import cors from "cors";
 import cookieParser from "cookie-parser";
+=======
+import "dotenv/config";
+import mongoose from "mongoose";
+import express from "express";
+import cors from "cors";
+>>>>>>> 7dcba19d2d2fea1813801286954f60f945d7aa70
 import path from "path";
 import fs from "node:fs";
 import mongoose from "mongoose";
@@ -12,7 +19,10 @@ import analysisRoutes from "./routes/analysis.js";
 import authRoutes from "./routes/auth.route.js";
 import reportsRoutes from "./routes/reports.js";
 import { errorHandler } from "./middleware/errorHandler.js";
+<<<<<<< HEAD
 import connectDB from "./db/db.js";
+=======
+>>>>>>> 7dcba19d2d2fea1813801286954f60f945d7aa70
 
 const app = express();
 const PORT = Number(process.env.PORT) || 5000;
@@ -39,11 +49,13 @@ app.use(
 );
 
 app.use(express.json({ limit: "1mb" }));
+<<<<<<< HEAD
 app.use(cookieParser());
 
+=======
+>>>>>>> 7dcba19d2d2fea1813801286954f60f945d7aa70
 app.use("/uploads", express.static(uploadsDirectory));
 
-// Root route
 app.get("/", (req, res) => {
   if (fs.existsSync(path.join(frontendBuildDirectory, "index.html"))) {
     return res.sendFile(path.join(frontendBuildDirectory, "index.html"));
@@ -57,18 +69,26 @@ app.get("/", (req, res) => {
   });
 });
 
-// Health check
 app.get("/api/health", (req, res) => {
   res.status(200).json({
     success: true,
     project: "RoadShield AI",
     status: "online",
+<<<<<<< HEAD
     mode: process.env.AI_MODE || "python",
     database: mongoose.connection.readyState === 1 ? "connected" : "disconnected",
+=======
+    database:
+      mongoose.connection.readyState === 1
+        ? "connected"
+        : "disconnected",
+    mode: process.env.AI_MODE || "demo",
+>>>>>>> 7dcba19d2d2fea1813801286954f60f945d7aa70
     timestamp: new Date().toISOString(),
   });
 });
 
+<<<<<<< HEAD
 app.get("/api/ready", (req, res) => {
   if (mongoose.connection.readyState !== 1) {
     return res.status(503).json({
@@ -85,6 +105,8 @@ app.get("/api/ready", (req, res) => {
 });
 
 // Analysis and reports routes
+=======
+>>>>>>> 7dcba19d2d2fea1813801286954f60f945d7aa70
 app.use("/api", analysisRoutes);
 app.use("/api", reportsRoutes);
 app.use("/api/auth", authRoutes);
@@ -105,7 +127,6 @@ if (fs.existsSync(frontendBuildDirectory)) {
   });
 }
 
-// 404 handler
 app.use((req, res) => {
   res.status(404).json({
     success: false,
@@ -113,21 +134,53 @@ app.use((req, res) => {
   });
 });
 
-// Global error handler
 app.use(errorHandler);
 
+<<<<<<< HEAD
 export { app };
 
 if (process.argv[1] && path.resolve(process.argv[1]) === __filename) {
   connectDB().then(() => {
+=======
+async function startServer() {
+  try {
+    if (!process.env.MONGODB_URI) {
+      throw new Error("MONGODB_URI is missing from backend/.env");
+    }
+
+    await mongoose.connect(process.env.MONGODB_URI, {
+      serverSelectionTimeoutMS: 10000,
+    });
+
+    console.log("MongoDB connected:", mongoose.connection.name);
+
+>>>>>>> 7dcba19d2d2fea1813801286954f60f945d7aa70
     app.listen(PORT, () => {
       console.log("======================================");
       console.log("       ROADSHIELD AI BACKEND");
       console.log("======================================");
       console.log(`API:    http://localhost:${PORT}`);
       console.log(`Health: http://localhost:${PORT}/api/health`);
+<<<<<<< HEAD
       console.log(`Mode:   ${process.env.AI_MODE || "python"}`);
       console.log("======================================");
     });
   });
 }
+=======
+      console.log(`Mode:   ${process.env.AI_MODE || "demo"}`);
+      console.log("Cloudinary configured:", {
+        cloudName: Boolean(process.env.CLOUDINARY_CLOUD_NAME),
+        apiKey: Boolean(process.env.CLOUDINARY_API_KEY),
+        apiSecret: Boolean(process.env.CLOUDINARY_API_SECRET),
+      });
+      console.log("======================================");
+    });
+  } catch (error) {
+    console.error("Backend startup failed:", error.message);
+    process.exit(1);
+  }
+}
+
+startServer();
+>>>>>>> 7dcba19d2d2fea1813801286954f60f945d7aa70
